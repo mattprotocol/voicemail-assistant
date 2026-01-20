@@ -107,24 +107,12 @@ export default function VoiceTriage({ accountEmail }: { accountEmail: string }) 
         status: 'active'
       }))
 
-      // Start voice call
-      if (vapi) {
+      // Start voice call directly with Vapi Web SDK
+      if (vapi && process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID) {
         setVapiState(prev => ({ ...prev, status: 'connecting' }))
 
-        const voiceRes = await fetch('/api/session/voice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: sessionData.sessionId })
-        })
-
-        if (!voiceRes.ok) {
-          throw new Error('Failed to start voice session')
-        }
-
-        const voiceData = await voiceRes.json()
-
-        // Start the Vapi call with the assistant
-        await vapi.start(process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!, {
+        // Start the Vapi call with the assistant - web calls use SDK directly
+        await vapi.start(process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID, {
           metadata: {
             sessionId: sessionData.sessionId,
             accountEmail
