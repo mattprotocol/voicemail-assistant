@@ -147,3 +147,62 @@ export type SessionStatus = 'active' | 'paused' | 'completed'
 
 // Undo action type enum
 export type ActionType = 'archive' | 'delete' | 'star' | 'mark_unread'
+
+// Gmail API response types
+
+/**
+ * Thread summary returned from inbox listing
+ */
+export interface InboxThread {
+  id: string
+  snippet: string
+  from: string
+  subject: string
+  date: string
+  labels: string[]
+  messageCount: number
+}
+
+/**
+ * Inbox listing API response
+ */
+export interface InboxResponse {
+  threads: InboxThread[]
+  nextPageToken: string | null
+  resultSizeEstimate: number
+}
+
+/**
+ * Message body content
+ */
+export interface MessageBody {
+  html: string | null
+  plain: string | null
+}
+
+/**
+ * Full message content from thread
+ */
+export interface ThreadMessage {
+  id: string
+  threadId: string
+  from: string
+  to: string
+  cc: string | null
+  subject: string
+  date: string
+  snippet: string
+  labels: string[]
+  body: MessageBody
+}
+
+/**
+ * Full thread response with messages
+ */
+export interface ThreadResponse {
+  id: string
+  historyId: string | null
+  subject: string
+  messageCount: number
+  messages: ThreadMessage[]
+}
