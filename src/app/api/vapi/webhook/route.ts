@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     // Parse the message
     const message: VapiWebhookMessage = JSON.parse(rawBody)
-    console.log('Vapi webhook received:', message.type)
+    console.log('Vapi webhook received:', message.type, JSON.stringify(message, null, 2))
 
     // Handle different message types
     switch (message.type) {
@@ -97,22 +97,70 @@ async function handleToolCalls(message: VapiToolCallMessage): Promise<NextRespon
   const results: VapiToolResult[] = []
   let spokenMessage = ''
 
-  // Get session from call metadata
-  const sessionId = (message.call as { metadata?: { sessionId?: string } })?.metadata?.sessionId
-  if (!sessionId) {
-    return NextResponse.json({
-      results: [],
-      spokenMessage: "I'm sorry, I couldn't find your session. Please restart the triage session."
-    })
+  // Get session from call metadata or fall back to finding by call ID
+  const callData = message.call as {
+    id?: string
+    metadata?: { sessionId?: string; accountEmail?: string }
   }
 
-  // Get session data
+  const sessionId = callData?.metadata?.sessionId
+  const callId = callData?.id
+  const accountEmail = callData?.metadata?.accountEmail
+
+  console.log('Looking for session:', { sessionId, callId, accountEmail })
+
   const supabase = createServiceClient()
-  const { data: session, error: sessionError } = await supabase
-    .from('sessions')
-    .select('*')
-    .eq('id', sessionId)
-    .single()
+  let session = null
+  let sessionError = null
+
+  // Try to find session by ID first
+  if (sessionId) {
+    const result = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single()
+    session = result.data
+    sessionError = result.error
+  }
+
+  // Fall back to finding by call ID
+  if (!session && callId) {
+    const result = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('vapi_call_id', callId)
+      .single()
+    session = result.data
+    sessionError = result.error
+  }
+
+  // Fall back to finding most recent active session for the account
+  if (!session && accountEmail) {
+    const result = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('account_email', accountEmail)
+      .eq('status', 'active')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .single()
+    session = result.data
+    sessionError = result.error
+  }
+
+  // Last resort: find most recent active session
+  if (!session) {
+    const result = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('status', 'active')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .single()
+    session = result.data
+    sessionError = result.error
+  }
 
   if (sessionError || !session) {
     return NextResponse.json({
