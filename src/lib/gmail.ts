@@ -194,3 +194,152 @@ export async function isThreadStarred(gmail: gmail_v1.Gmail, threadId: string): 
   const messages = thread.data.messages || []
   return messages.some(msg => msg.labelIds?.includes('STARRED'))
 }
+
+/**
+ * Email thread interface for inbox listing
+ */
+export interface EmailThread {
+  threadId: string
+  subject: string
+  sender: string
+  senderEmail: string
+  snippet: string
+  body: string
+  receivedAt: string
+  isUnread: boolean
+}
+
+/**
+ * Extract plain text body from message payload
+ */
+function extractBody(payload: gmail_v1.Schema$MessagePart | undefined): string {
+  if (!payload) return ''
+
+  // Direct body data
+  if (payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64').toString('utf-8')
+  }
+
+  // Check parts for text content
+  if (payload.parts) {
+    // First try text/plain
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/plain' && part.body?.data) {
+        return Buffer.from(part.body.data, 'base64').toString('utf-8')
+      }
+    }
+    // Then try text/html and strip tags
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/html' && part.body?.data) {
+        const html = Buffer.from(part.body.data, 'base64').toString('utf-8')
+        return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      }
+    }
+    // Recurse into nested parts
+    for (const part of payload.parts) {
+      const nested = extractBody(part)
+      if (nested) return nested
+    }
+  }
+
+  return ''
+}
+
+/**
+ * Get inbox threads for an account
+ */
+export async function getInboxThreads(
+  accountEmail: string,
+  maxResults = 20
+): Promise<EmailThread[]> {
+  const gmail = await getGmailClient(accountEmail)
+  if (!gmail) {
+    throw new Error(`No Gmail client available for ${accountEmail}`)
+  }
+
+  const response = await gmail.users.threads.list({
+    userId: 'me',
+    labelIds: ['INBOX'],
+    maxResults,
+  })
+
+  const threads = response.data.threads || []
+  const results: EmailThread[] = []
+
+  for (const thread of threads) {
+    if (!thread.id) continue
+
+    const full = await gmail.users.threads.get({
+      userId: 'me',
+      id: thread.id,
+      format: 'full',
+    })
+
+    // Get the latest message in the thread
+    const messages = full.data.messages || []
+    const msg = messages[messages.length - 1]
+    if (!msg) continue
+
+    const headers = msg.payload?.headers || []
+    const subject = headers.find(h => h.name === 'Subject')?.value || '(no subject)'
+    const from = headers.find(h => h.name === 'From')?.value || ''
+    const date = headers.find(h => h.name === 'Date')?.value || ''
+
+    // Parse sender name and email
+    const match = from.match(/^(.+?)\s*<(.+?)>$/)
+
+    results.push({
+      threadId: thread.id,
+      subject,
+      sender: match ? match[1].replace(/"/g, '') : from,
+      senderEmail: match ? match[2] : from,
+      snippet: msg.snippet || '',
+      body: extractBody(msg.payload),
+      receivedAt: date,
+      isUnread: msg.labelIds?.includes('UNREAD') || false,
+    })
+  }
+
+  return results
+}
+
+/**
+ * Get a single thread by ID
+ */
+export async function getThread(
+  accountEmail: string,
+  threadId: string
+): Promise<EmailThread> {
+  const gmail = await getGmailClient(accountEmail)
+  if (!gmail) {
+    throw new Error(`No Gmail client available for ${accountEmail}`)
+  }
+
+  const full = await gmail.users.threads.get({
+    userId: 'me',
+    id: threadId,
+    format: 'full',
+  })
+
+  const messages = full.data.messages || []
+  const msg = messages[messages.length - 1]
+  if (!msg) throw new Error('No messages in thread')
+
+  const headers = msg.payload?.headers || []
+  const subject = headers.find(h => h.name === 'Subject')?.value || '(no subject)'
+  const from = headers.find(h => h.name === 'From')?.value || ''
+  const date = headers.find(h => h.name === 'Date')?.value || ''
+
+  const match = from.match(/^(.+?)\s*<(.+?)>$/)
+
+  return {
+    threadId,
+    subject,
+    sender: match ? match[1].replace(/"/g, '') : from,
+    senderEmail: match ? match[2] : from,
+    snippet: msg.snippet || '',
+    body: extractBody(msg.payload),
+    receivedAt: date,
+    isUnread: msg.labelIds?.includes('UNREAD') || false,
+  }
+}
