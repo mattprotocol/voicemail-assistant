@@ -2,13 +2,17 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Voicemail Assistant',
-  description: 'Voice-first PWA for triaging Superhuman email while driving',
+  title: 'Voice Email Triage',
+  description: 'Process your inbox hands-free while driving',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Voicemail',
+    title: 'VoiceMail',
+  },
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/icon-192.png',
   },
 }
 
@@ -17,7 +21,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#000000',
+  themeColor: '#2563eb',
 }
 
 export default function RootLayout({

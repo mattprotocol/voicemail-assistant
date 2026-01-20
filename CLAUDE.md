@@ -6,6 +6,7 @@ Voice-first PWA for triaging Superhuman email while driving.
 
 **Phase 1 Complete**: Gmail OAuth, Read Emails, Archive/Delete/Star, Undo
 **Phase 2 Complete**: Railway Playwright service, Superhuman scraping, Thread mapping
+**Phase 3 Complete**: Vapi voice integration, webhook handler, voice session management
 
 ## Project Overview
 
@@ -25,10 +26,18 @@ src/
 │       ├── auth/gmail/       # OAuth routes
 │       ├── emails/           # Read endpoints (inbox, thread)
 │       ├── actions/          # Action endpoints (archive, delete, star, undo)
-│       └── session/start/    # Triage session management
+│       ├── session/
+│       │   ├── start/        # Start triage session
+│       │   ├── stop/         # Stop/pause session
+│       │   ├── next/         # Get next email in queue
+│       │   ├── voice/        # Start Vapi voice call
+│       │   └── [sessionId]/  # Get session status
+│       └── vapi/
+│           └── webhook/      # Vapi webhook handler for function calls
 ├── lib/
 │   ├── gmail.ts              # Gmail API wrapper with token refresh
 │   ├── railway.ts            # Railway Playwright service client
+│   ├── vapi.ts               # Vapi voice AI client and configuration
 │   └── supabase/             # Supabase clients (client.ts, server.ts)
 └── types/
     └── database.ts           # TypeScript types for DB and API responses
@@ -71,6 +80,12 @@ See `.env.example` for required environment variables.
 **Required for Phase 2:**
 - `RAILWAY_PLAYWRIGHT_URL` - Railway service URL (default: http://localhost:3001)
 
+**Required for Phase 3:**
+- `VAPI_API_KEY` - Vapi API key for server-side operations
+- `VAPI_ASSISTANT_ID` - Vapi assistant ID (created in Vapi dashboard)
+- `VAPI_WEBHOOK_SECRET` - Secret for verifying webhook signatures
+- `VAPI_PUBLIC_KEY` - Vapi public key for client-side SDK
+
 ## Supabase Project
 
 - **Project ID**: `obapgmaakwzflbsetkgl`
@@ -100,6 +115,24 @@ See `.env.example` for required environment variables.
 ```
 Returns: sessionId, queueLength, mappingStats, firstEmail
 
+**Vapi voice session** (`POST /api/session/voice`):
+```json
+{ "sessionId": "uuid" }
+```
+Returns: callId, webCallUrl, currentEmail, position, total
+
+**Vapi webhook** (`POST /api/vapi/webhook`):
+- Receives tool-calls from Vapi assistant
+- Executes email actions (archive, delete, star, skip, undo)
+- Returns results with spoken messages
+- Verifies webhook signature via HMAC-SHA256
+
+**Vapi client** (`src/lib/vapi.ts`):
+- `verifyWebhookSignature()` - Verify incoming webhook requests
+- `createWebCall()` - Start a web call session
+- `endCall()` - End an active call
+- `ASSISTANT_TOOLS` - Function definitions for the assistant
+
 ## Development Notes
 
 - Use Server Components by default
@@ -109,9 +142,18 @@ Returns: sessionId, queueLength, mappingStats, firstEmail
 - Gmail tokens stored unencrypted (Supabase handles encryption at rest)
 - Railway service uses in-memory session storage (30 min TTL)
 
-## Next Steps (Phase 3)
+## Next Steps (Phase 4 - Polish)
 
-1. Vapi account setup and API key
-2. Voice assistant configuration
-3. Webhook handler for Vapi function calls
-4. Voice triage loop integration
+1. Voice triage UI component with Vapi Web SDK
+2. PWA manifest and service worker
+3. Session resume on app open
+4. Error handling and retry logic
+5. Real-world testing and voice prompt iteration
+
+## Vapi Setup Instructions
+
+1. Create account at [vapi.ai](https://vapi.ai)
+2. Create an assistant with the system prompt from `src/lib/vapi.ts`
+3. Add function tools as defined in `ASSISTANT_TOOLS`
+4. Set server URL to: `https://your-domain.com/api/vapi/webhook`
+5. Copy API key, Assistant ID, and webhook secret to `.env.local`

@@ -45,6 +45,7 @@ export type Database = {
           started_at: string | null
           status: string
           updated_at: string | null
+          vapi_call_id: string | null
         }
         Insert: {
           account_email: string
@@ -54,6 +55,7 @@ export type Database = {
           started_at?: string | null
           status: string
           updated_at?: string | null
+          vapi_call_id?: string | null
         }
         Update: {
           account_email?: string
@@ -63,6 +65,7 @@ export type Database = {
           started_at?: string | null
           status?: string
           updated_at?: string | null
+          vapi_call_id?: string | null
         }
         Relationships: []
       }

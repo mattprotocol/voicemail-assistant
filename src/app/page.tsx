@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import VoiceTriage from '@/components/VoiceTriage'
 
 interface EmailThread {
   id: string
@@ -24,10 +25,13 @@ interface UndoState {
   expiresAt: Date
 }
 
+type ViewMode = 'voice' | 'inbox'
+
 export default function Home() {
   // Auth state
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<ViewMode>('voice')
 
   // Inbox state
   const [threads, setThreads] = useState<EmailThread[]>([])
@@ -67,7 +71,7 @@ export default function Home() {
     checkAuth()
   }, [])
 
-  // Fetch inbox when authenticated
+  // Fetch inbox when authenticated and in inbox mode
   const fetchInbox = useCallback(
     async (pageToken?: string) => {
       if (!accountEmail) return
@@ -92,10 +96,8 @@ export default function Home() {
         const inboxData = data as InboxResponse
 
         if (pageToken) {
-          // Append to existing threads
           setThreads((prev) => [...prev, ...inboxData.threads])
         } else {
-          // Replace threads
           setThreads(inboxData.threads)
         }
         setNextPageToken(inboxData.nextPageToken)
@@ -108,12 +110,12 @@ export default function Home() {
     [accountEmail]
   )
 
-  // Fetch inbox when authenticated
+  // Fetch inbox when switching to inbox mode
   useEffect(() => {
-    if (accountEmail) {
+    if (accountEmail && viewMode === 'inbox' && threads.length === 0) {
       fetchInbox()
     }
-  }, [accountEmail, fetchInbox])
+  }, [accountEmail, viewMode, threads.length, fetchInbox])
 
   // Undo countdown timer
   useEffect(() => {
@@ -144,7 +146,6 @@ export default function Home() {
 
   // Disconnect Gmail
   const handleDisconnect = () => {
-    // Clear the cookie
     document.cookie = 'gmail_account=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     setAccountEmail(null)
     setThreads([])
@@ -170,11 +171,9 @@ export default function Home() {
         throw new Error(data.error || 'Failed to archive')
       }
 
-      // Remove from list
       setThreads((prev) => prev.filter((t) => t.id !== threadId))
       setStatus('Thread archived')
 
-      // Set undo state
       setUndoState({
         threadId,
         action: 'archive',
@@ -205,11 +204,9 @@ export default function Home() {
         throw new Error(data.error || 'Failed to delete')
       }
 
-      // Remove from list
       setThreads((prev) => prev.filter((t) => t.id !== threadId))
       setStatus('Thread moved to trash')
 
-      // Set undo state
       setUndoState({
         threadId,
         action: 'delete',
@@ -240,7 +237,6 @@ export default function Home() {
         throw new Error(data.error || 'Failed to star')
       }
 
-      // Update thread labels
       setThreads((prev) =>
         prev.map((t) => {
           if (t.id === threadId) {
@@ -258,7 +254,6 @@ export default function Home() {
 
       setStatus(data.starred ? 'Thread starred' : 'Thread unstarred')
 
-      // Set undo state
       setUndoState({
         threadId,
         action: 'star',
@@ -294,7 +289,6 @@ export default function Home() {
       setStatus(`Undid ${data.undoneAction} action`)
       setUndoState(null)
 
-      // Refresh inbox to show restored thread
       fetchInbox()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to undo')
@@ -303,18 +297,16 @@ export default function Home() {
     }
   }
 
-  // Parse sender name from "From" header
+  // Parse sender name
   const parseSender = (from: string): string => {
-    // Extract name from "Name <email>" format
     const match = from.match(/^"?([^"<]+)"?\s*</)
     if (match) {
       return match[1].trim()
     }
-    // Just email address
     return from.split('@')[0]
   }
 
-  // Format date for display
+  // Format date
   const formatDate = (dateStr: string): string => {
     if (!dateStr) return ''
     try {
@@ -334,47 +326,108 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-8">
+      <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <div className="text-gray-500">Loading...</div>
       </main>
     )
   }
 
-  return (
-    <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Gmail Test UI
-            </h1>
-            {accountEmail && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">{accountEmail}</p>
-            )}
+  // Not authenticated - show connect screen
+  if (!accountEmail) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg
+              className="h-8 w-8 text-blue-600 dark:text-blue-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+              />
+            </svg>
           </div>
-          <div>
-            {accountEmail ? (
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Voice Email Triage
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mb-8">
+            Process your inbox hands-free while driving
+          </p>
+
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleConnect}
+            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+            Connect Gmail
+          </button>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      {/* Header */}
+      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 px-6 py-4 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* View mode toggle */}
+            <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg flex">
               <button
-                onClick={handleDisconnect}
-                className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 border border-red-300 dark:border-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                onClick={() => setViewMode('voice')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'voice'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
               >
-                Disconnect
+                Voice
               </button>
-            ) : (
               <button
-                onClick={handleConnect}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                onClick={() => setViewMode('inbox')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'inbox'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
               >
-                Connect Gmail
+                Inbox
               </button>
-            )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">
+              {accountEmail}
+            </span>
+            <button
+              onClick={handleDisconnect}
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              Disconnect
+            </button>
           </div>
         </div>
       </header>
 
       {/* Error/Status Messages */}
-      {(error || status) && (
+      {(error || status) && viewMode === 'inbox' && (
         <div className="max-w-4xl mx-auto px-6 mt-4">
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">
@@ -391,35 +444,9 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-6 py-6">
-        {!accountEmail ? (
-          <div className="text-center py-20">
-            <div className="text-gray-400 dark:text-gray-500 mb-4">
-              <svg
-                className="mx-auto h-16 w-16"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Connect your Gmail
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">
-              Sign in to test the Gmail integration
-            </p>
-            <button
-              onClick={handleConnect}
-              className="px-6 py-3 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              Connect Gmail Account
-            </button>
+        {viewMode === 'voice' ? (
+          <div className="py-8">
+            <VoiceTriage accountEmail={accountEmail} />
           </div>
         ) : (
           <>
@@ -561,7 +588,7 @@ export default function Home() {
       </div>
 
       {/* Undo Bar */}
-      {undoState && undoTimeLeft > 0 && (
+      {undoState && undoTimeLeft > 0 && viewMode === 'inbox' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
           <div className="bg-gray-900 dark:bg-gray-700 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4">
             <span className="text-sm">
